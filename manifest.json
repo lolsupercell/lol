@@ -1,0 +1,29 @@
+{
+  "id": "/",
+  "name": "Service Register — UPSC & APPSC Gr-I Tracker",
+  "short_name": "Service Reg",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F5F7",
+  "theme_color": "#0A84FF",
+  "lang": "en",
+  "dir": "ltr",
+  "description": "A daily preparation tracker for UPSC Civil Services Examination and APPSC Group-I aspirants, covering syllabus progress, planner, daily and weekly logs, and performance analysis.",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
