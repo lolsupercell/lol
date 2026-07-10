@@ -93,6 +93,7 @@ button{font-family:inherit;cursor:pointer;}
 /* ---------- Mobile top bar + drawer nav ---------- */
 #mobile-topbar{display:none;}
 #nav-overlay{display:none;}
+#edge-tab{display:none;}
 @media(max-width:900px){
   #app{display:block;}
   #mobile-topbar{
@@ -129,6 +130,21 @@ button{font-family:inherit;cursor:pointer;}
 
   #main{padding:18px 16px 60px 16px;max-width:100%;}
   .hero{padding:18px 16px;}
+
+  /* A small tab on the screen edge, sitting at a comfortable thumb height,
+     so opening the menu doesn't always mean reaching all the way up to the
+     top corner — one-handed use on a tall phone. */
+  #edge-tab{
+    display:flex;align-items:center;justify-content:center;
+    position:fixed;left:0;top:62%;transform:translateY(-50%);z-index:39;
+    width:26px;height:58px;border:none;border-radius:0 12px 12px 0;
+    background:var(--seal);color:#fff;box-shadow:2px 2px 10px rgba(0,0,0,.18);
+    padding:0;
+  }
+  #edge-tab svg{width:15px;height:15px;}
+  #edge-tab:active{background:#0972df;}
+  body.mood-good #edge-tab{background:rgb(47,168,79);}
+  body.mood-low #edge-tab{background:rgb(255,105,97);}
 }
 
 .pagehead{margin-bottom:26px;padding-bottom:14px;}
@@ -211,6 +227,8 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .dmy-cal:hover{background:var(--line);}
 
 /* Self-contained calendar popup (no native <input type=date>, no network — works fully offline) */
+#popup-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:9997;}
+#popup-backdrop.open{display:block;}
 #cal-popup{
   position:fixed;z-index:9999;background:var(--white);border:none;border-radius:14px;
   box-shadow:var(--shadow-md);padding:12px;width:296px;display:none;font-family:inherit;
@@ -791,6 +809,16 @@ body.tp-modal-open{overflow:hidden;}
   .tm-text{font-size:13px;padding-left:6px;padding-right:4px;}
 
   /* Calendar & time popups: never exceed the viewport, with a safety margin. */
+  /* Calendar & time popups: on mobile these become a centered, fixed-position
+     modal instead of trying to hover near the tapped field. Anchoring to the
+     field breaks the moment the page scrolls (position:fixed doesn't track
+     the field's new location), which is what made the calendar look "stuck"
+     — centering sidesteps that entirely. */
+  #cal-popup, #time-popup{
+    top:50%!important; left:50%!important; right:auto!important; bottom:auto!important;
+    transform:translate(-50%,-50%)!important;
+    max-height:82vh; overflow-y:auto;
+  }
   #cal-popup{width:min(296px, 92vw)!important;}
   #time-popup{width:min(236px, 88vw)!important;}
 
@@ -845,6 +873,9 @@ body.tp-modal-open{overflow:hidden;}
   <button id="hamburger" aria-label="Menu"><span></span></button>
 </div>
 <div id="nav-overlay"></div>
+<button id="edge-tab" aria-label="Open menu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+</button>
 <div id="app">
   <nav id="sidebar">
     <div class="brand">
@@ -1103,6 +1134,30 @@ function pickCalDate(iso){
   }
   closeCalPopup();
 }
+function ensurePopupBackdrop(){
+  let el = document.getElementById('popup-backdrop');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'popup-backdrop';
+  document.body.appendChild(el);
+  el.addEventListener('click', ()=>{
+    closeCalPopup();
+    closeTimePopup();
+  });
+  return el;
+}
+function showPopupBackdrop(){
+  ensurePopupBackdrop().classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function hidePopupBackdrop(){
+  const cal = document.getElementById('cal-popup');
+  const time = document.getElementById('time-popup');
+  if((cal && cal.classList.contains('open')) || (time && time.classList.contains('open'))) return;
+  const el = document.getElementById('popup-backdrop');
+  if(el) el.classList.remove('open');
+  document.body.style.overflow = '';
+}
 function openCalPopup(btn){
   const targetId = btn.dataset.target;
   const txt = document.getElementById(targetId);
@@ -1112,6 +1167,7 @@ function openCalPopup(btn){
   renderCalPopup();
   const el = document.getElementById('cal-popup');
   el.classList.add('open');
+  showPopupBackdrop();
   const r = btn.getBoundingClientRect();
   const popW = 296;
   let left = r.left;
@@ -1123,6 +1179,7 @@ function closeCalPopup(){
   const el = document.getElementById('cal-popup');
   if(el) el.classList.remove('open');
   calState.targetId = null;
+  hidePopupBackdrop();
 }
 document.addEventListener('input', (e)=>{
   if(!e.target.classList || !e.target.classList.contains('dmy-text')) return;
@@ -1345,6 +1402,7 @@ function openTimePopup(btn){
   renderTimePopup();
   const el = document.getElementById('time-popup');
   el.classList.add('open');
+  showPopupBackdrop();
   const r = btn.getBoundingClientRect();
   const popW = 236;
   let left = r.left;
@@ -1358,6 +1416,7 @@ function closeTimePopup(){
   const el = document.getElementById('time-popup');
   if(el) el.classList.remove('open');
   tpState.targetId = null;
+  hidePopupBackdrop();
 }
 function applyTimePopup(){
   const txt = document.getElementById(tpState.targetId);
@@ -4558,11 +4617,26 @@ const STATE = {
 const RENDERERS = {};
 let syllabusNav = { exam:'prelims', paperId:null, sectionId:null, topicId:null };
 
-async function goPage(name){
+async function goPage(name, opts){
+  opts = opts || {};
   document.querySelectorAll('.navlist button').forEach(b=>b.classList.toggle('active', b.dataset.page===name));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='page-'+name));
   if(RENDERERS[name]) await RENDERERS[name]();
+  if(!opts.fromPopstate){
+    const state = { sgPage: name };
+    if(opts.replace) history.replaceState(state, '', '#'+name);
+    else history.pushState(state, '', '#'+name);
+  }
 }
+// Android's hardware/gesture back button closes the whole app if the page
+// never adds any browser history — there's nothing for it to "go back" to.
+// This makes in-app page navigation add real history entries, so back
+// steps back through your recent pages first, only exiting once you're
+// back at the page you started on (the normal, expected behavior).
+window.addEventListener('popstate', (e)=>{
+  const name = (e.state && e.state.sgPage) || 'dashboard';
+  goPage(name, { fromPopstate: true });
+});
 document.getElementById('navlist').addEventListener('click', async (e)=>{
   const btn = e.target.closest('button[data-page]');
   if(!btn) return;
@@ -7643,7 +7717,7 @@ document.getElementById('op-continue').addEventListener('click', ()=>{
     screen.style.display='none';
     screen.classList.remove('op-zoom');
     document.getElementById('app').style.display='flex';
-    await goPage('dashboard');
+    await goPage('dashboard', { replace: true });
     const hero = document.querySelector('.hero');
     if(hero){
       hero.classList.add('today-pulse');
@@ -7713,8 +7787,7 @@ async function registerPeriodicSyncBestEffort(){
   await loadSyllabusProgress();
   await renderOpeningScreen();
   await applyMoodTint();
-  await goPage('dashboard');
-  if(STATE.settings.reminderEnabled) startReminderTimer();
+  await goPage('dashboard', { replace: true });
   registerPeriodicSyncBestEffort();
 })();
 </script>
@@ -7724,14 +7797,20 @@ async function registerPeriodicSyncBestEffort(){
   var sidebar = document.getElementById('sidebar');
   var overlay = document.getElementById('nav-overlay');
   var hamburger = document.getElementById('hamburger');
+  var edgeTab = document.getElementById('edge-tab');
   if (!sidebar || !overlay || !hamburger) return;
 
-  function openDrawer(){ sidebar.classList.add('open'); overlay.classList.add('open'); }
-  function closeDrawer(){ sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+  function openDrawer(){ sidebar.classList.add('open'); overlay.classList.add('open'); if(edgeTab) edgeTab.style.display='none'; }
+  function closeDrawer(){ sidebar.classList.remove('open'); overlay.classList.remove('open'); if(edgeTab) edgeTab.style.display=''; }
 
   hamburger.addEventListener('click', function(){
     sidebar.classList.contains('open') ? closeDrawer() : openDrawer();
   });
+  if(edgeTab){
+    edgeTab.addEventListener('click', function(){
+      sidebar.classList.contains('open') ? closeDrawer() : openDrawer();
+    });
+  }
   overlay.addEventListener('click', closeDrawer);
   sidebar.addEventListener('click', function(e){
     if (e.target.closest('button[data-page]')) closeDrawer();
