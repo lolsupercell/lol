@@ -1,4 +1,4 @@
-const CACHE_NAME = "service-register-v16";
+const CACHE_NAME = "service-register-v17";
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -24,13 +24,24 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Tapping the reminder notification opens (or focuses) the app instead of
-// just dismissing.
+// just dismissing. The "✅ Logged it" action is an honest quick-dismiss only
+// — a service worker has no access to the page's storage, so it can't
+// actually save anything on your behalf; it just closes the notification.
+// "Open & log now" (or tapping the notification body itself) opens the app
+// straight to today's Daily Log so you can mark it there for real.
 self.addEventListener("notificationclick", (event) => {
+  const action = event.action;
   event.notification.close();
+  if(action === 'log-yes') return; // acknowledged, nothing more to do
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const c of list) { if ("focus" in c) return c.focus(); }
-      if (clients.openWindow) return clients.openWindow("./");
+      for (const c of list) {
+        if ("focus" in c) {
+          c.postMessage({ type: 'open-daily-log' });
+          return c.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow("./?page=daily");
     })
   );
 });
@@ -66,4 +77,3 @@ async function checkReminderAndNotify(){
     });
   }catch(e){ /* silently skip — this is a best-effort bonus path */ }
 }
-
